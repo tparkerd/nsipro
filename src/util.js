@@ -18,8 +18,8 @@ const lookup = (key, obj) => {
   values = keysInObject(obj, key);
 
   // DEBUG
-  console.log(`Searching for '${key}'`);
-  console.log(values);
+  // console.log(`Searching for '${key}'`);
+  // console.log(values);
 
   // If the key is found...
   if (values.length > 0) {
@@ -176,8 +176,8 @@ exports.__get_type = (data) => {
       for (comment of comments) {
         let m = comment.match(pattern);
         if (m) {
-          if ("scan_type" in m.groups()) {
-            value = m.group("scan_type");
+          if ("scan_type" in m.groups) {
+            value = m.groups.scan_type;
             for (let c of categories) {
               if (value.includes(c)) {
                 category = c;
@@ -198,6 +198,182 @@ exports.__get_type = (data) => {
 
   // IF we reach here, no scan type could be found
   return [null, null];
+};
+
+exports.__get_source_to_detector_distance = (data) => {
+  const tag =
+    data["NSI_Reconstruction_Project"]["CT_Project_Configuration"][
+      "Technique_Configuration"
+    ]["Setup"];
+
+  if (Object.keys(tag).includes("source_to_detector_distance")) {
+    return tag["source_to_detector_distance"];
+  } else {
+    console.error("Couldn't find the source to detector distance");
+  }
+};
+
+exports.__get_source_to_table_distance = (data) => {
+  const tag =
+    data["NSI_Reconstruction_Project"]["CT_Project_Configuration"][
+      "Technique_Configuration"
+    ]["Setup"];
+  if (Object.keys(tag).includes("source_to_table_distance"))
+    return tag["source_to_table_distance"];
+};
+
+exports.__get_pitch = (data) => {
+  const tag =
+    data["NSI_Reconstruction_Project"]["CT_Project_Configuration"][
+      "Technique_Configuration"
+    ];
+  if (Object.keys(tag).includes("Ug")) {
+    let value = lookup("det_pitch", tag["Ug"]);
+    if (value) return value;
+  }
+};
+
+exports.__estimate_slicethickness = (
+  pitch,
+  source_to_detector_distance,
+  source_to_table_distance
+) => {
+  if (pitch && source_to_detector_distance && source_to_table_distance) {
+    return (pitch / source_to_detector_distance) * source_to_table_distance;
+  }
+  console.warn("Could not estimate slice thickness");
+};
+
+exports.__get_resolution = (data) => {
+  const tag = data["NSI_Reconstruction_Project"];
+  // When a recon has been done
+  if (Object.keys(tag).includes("Volume")) {
+    let dimensions = lookup("resolution", tag["Volume"]);
+    dimentions = dimensions.split(/\s+/);
+    let [w, d, h] = dimentions;
+    return [w, h, d];
+  }
+};
+
+// def __get_voltage():
+// reported_voltage = lookup("kV",  data["NSI_Reconstruction_Project"]["CT_Project_Configuration"]["Technique_Configuration"])
+// actual_voltage = lookup("actual_kV",  data["NSI_Reconstruction_Project"]["CT_Project_Configuration"]["Technique_Configuration"])
+// # Edge case: sometimes an actual voltage is not recorded, so use the reported one instead
+// if not actual_voltage:
+//     actual_voltage = None
+// return reported_voltage, actual_voltage
+
+exports.__get_voltage = (data) => {
+  const tag =
+    data["NSI_Reconstruction_Project"]["CT_Project_Configuration"][
+      "Technique_Configuration"
+    ];
+  let reported_voltage = lookup("kV", tag);
+  let actual_voltage = lookup("actual_kV", tag);
+
+  // Edge case: sometimes an actual voltage is not recorded, so use the reported one instead
+  if (!actual_voltage) actual_voltage = null;
+  return [reported_voltage, actual_voltage];
+};
+
+exports.__get_current = (data) => {
+  const tag =
+    data["NSI_Reconstruction_Project"]["CT_Project_Configuration"][
+      "Technique_Configuration"
+    ];
+
+  let reported_current = lookup("uA", tag);
+  let actual_current = lookup("actual_uA", tag);
+
+  if (!actual_current) actual_current = null;
+  return [reported_current, actual_current];
+};
+
+// NOTE(tparker): I'm not 100% sure that this is the actual filter that the technicians report
+exports.__get_filter = (data) => {
+  const tag =
+    data["NSI_Reconstruction_Project"]["CT_Project_Configuration"][
+      "Technique_Configuration"
+    ];
+  return lookup("phys_filter", tag);
+};
+
+exports.__get_framerate = (data) =>
+  lookup(
+    "fps",
+    data["NSI_Reconstruction_Project"]["CT_Project_Configuration"][
+      "Technique_Configuration"
+    ]["Detector"]
+  );
+exports.__get_calcuated_Ug = (data) => {
+  const tag =
+    data["NSI_Reconstruction_Project"]["CT_Project_Configuration"][
+      "Technique_Configuration"
+    ];
+  if (Object.keys(tag).includes("Ug")) {
+    let value = lookup("#text", tag["Ug"]);
+    if (value) {
+      return parseFloat(value); // todo: remove surrounding parenthese and units
+    }
+  }
+
+  value = lookup("ug_text", tag["Ug"]);
+  if (value) {
+    pattern = /^.*\((?<value>\S+)\s+pixels\)$/;
+    let m = value.match(pattern);
+    if (m) {
+      if (value in m.groups) {
+        return parseFloat(m.group.value);
+      }
+    }
+  }
+};
+exports.__get_zoom_factor = (data) => {
+  const tag =
+    data["NSI_Reconstruction_Project"]["CT_Project_Configuration"][
+      "Technique_Configuration"
+    ];
+  if (Object.keys(tag).includes("Ug")) {
+    let value = lookup("zoom_factor_text", tag["Ug"]);
+    if (value) return parseFloat(value.slice(1)); // remove surrounding parentheses and units (in pixels)
+  }
+};
+exports.__get_projection_count = (data) => {
+  return lookup("Number_of_projections");
+};
+exports.__get_rotation_count = (data) => {
+  // only applies to VorteX scans
+  const tag = data["NSI_Reconstruction_Project"]["CT_Project_Configuration"];
+  if (Object.keys(tag).includes("VorteX")) {
+    let vortex_metadata = tag["VorteX"];
+    if (vortex_metadata && vortex_metadata.includes("Revs"))
+      return vortex_metadata["Revs"];
+  }
+};
+exports.__get_frames_averaged = (data) => {
+  return lookup("Frame_averaging", data);
+};
+exports.__get_helical_pitch = (data) => {
+  const tag = data["NSI_Reconstruction_Project"]["CT_Project_Configuration"];
+  if (Object.keys(tag).includes("VorteX")) {
+    let vortex_metadata = tag["VorteX"];
+    if (vortex_metadata && vortex_metadata.includes("Pitch")) {
+      return vortex_metadata["Pitch"];
+    }
+  }
+};
+exports.__get_defective_pixels = (data) => {
+  let statuses = lookup("status", data);
+  if (statuses instanceof String || typeof statuses === "string") {
+    statuses = [statuses];
+  }
+  for (status of statuses) {
+    let pattern = /^(?<pixel_count>\d+) defective .*$/;
+    let m = status.match(pattern);
+    if ("pixel_count" in m.groups) {
+      return parseInt(m.groups.pixel_count);
+    }
+  }
 };
 
 exports.lookup = lookup;

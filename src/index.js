@@ -10,6 +10,22 @@ const {
   __get_acquisition_begin,
   __get_acquisition_end,
   __get_type,
+  __get_source_to_detector_distance,
+  __get_source_to_table_distance,
+  __get_pitch,
+  __estimate_slicethickness,
+  __get_resolution,
+  __get_voltage,
+  __get_current,
+  __get_filter,
+  __get_framerate,
+  __get_calcuated_Ug,
+  __get_zoom_factor,
+  __get_projection_count,
+  __get_rotation_count,
+  __get_frames_averaged,
+  __get_helical_pitch,
+  __get_defective_pixels,
 } = require("./util.js");
 
 /**
@@ -112,13 +128,12 @@ const cast_dtypes = async (xml) => {
  * @param {string} text Contents of NSIPRO file
  * @returns {Object} JSON object representation of text
  */
-const parse = async (text) => {
+const parse = async (fname, text) => {
   try {
     let xml = standardize(text);
     let json = await cast_dtypes(xml);
     convertShortArraysToSingleValues(json);
 
-    const keys = Array.from(new Set(get_all_keys(json)));
     const acquisition_software_version = lookup("Acquisition_Software", json);
 
     // Collate key-value pairs of interest
@@ -135,31 +150,33 @@ const parse = async (text) => {
       uid = lookup("Part_Name", json);
     }
     let [_type, type_category] = __get_type(json);
-    // source_to_detector_distance = __get_source_to_detector_distance()
-    // source_to_table_distance = __get_source_to_table_distance()
-    // pitch = __get_pitch() // todo
+    let source_to_detector_distance = __get_source_to_detector_distance(json);
+    let source_to_table_distance = __get_source_to_table_distance(json);
+    let pitch = __get_pitch(json);
 
-    // // Dimensions
-    // dimensions = __get_resolution()
-    // if (dimensions) {
-    //   width, height, depth = dimensions
-    // }
+    // Dimensions
+    let dimensions = __get_resolution(json);
+    let width, height, depth;
+    if (dimensions) {
+      dimensions = dimensions.map((x) => parseInt(x));
+      [width, height, depth] = dimensions;
+    }
 
-    // reported_voltage, actual_voltage = __get_voltage()
-    // reported_current, actual_current = __get_current()
-    // _filter = __get_filter()
-    // framerate = __get_framerate()
-    // calculated_Ug = __get_calcuated_Ug()
-    // zoom_factor = __get_zoom_factor()
-    // projection_count = __get_projection_count()
-    // rotation_count = __get_rotation_count() // only applies to VorteX scans
-    // frames_averaged = __get_frames_averaged()
-    // helical_pitch = __get_helical_pitch() // only applies to VorteX scans
-    // defective_pixels = __get_defective_pixels()
+    let [reported_voltage, actual_voltage] = __get_voltage(json);
+    let [reported_current, actual_current] = __get_current(json);
+    let _filter = __get_filter(json);
+    let framerate = __get_framerate(json);
+    let calculated_Ug = __get_calcuated_Ug(json);
+    let zoom_factor = __get_zoom_factor(json);
+    let projection_count = __get_projection_count(json);
+    let rotation_count = __get_rotation_count(json); // only applies to VorteX scans
+    let frames_averaged = __get_frames_averaged(json);
+    let helical_pitch = __get_helical_pitch(json); // only applies to VorteX scans
+    let defective_pixels = __get_defective_pixels(json);
 
     json["derived_fields"] = {};
     dfields = json["derived_fields"];
-    // dfields["nsipro_filepath"] = fname
+    dfields["nsipro_filepath"] = fname;
 
     // Scan Duration (acquisition)
     // ISO format: YYYY-MM-DDThh:mm:ssTZD
@@ -176,41 +193,46 @@ const parse = async (text) => {
     dfields["scan_type"] = _type;
     dfields["scan_type_category"] = type_category;
     dfields["acquisition_software_version"] = acquisition_software_version;
-    // dfields["source_to_detector_distance"] = source_to_detector_distance
-    // dfields["source_to_table_distance"] = source_to_table_distance
+    dfields["source_to_detector_distance"] = source_to_detector_distance;
+    dfields["source_to_table_distance"] = source_to_table_distance;
 
-    // dfields["pitch"] = pitch
-    // if pitch:
-    //     dfields["estimated_slicethickness"] = __estimate_slicethickness(pitch, source_to_detector_distance, source_to_table_distance)
-    // else:
-    //     dfields["estimated_slicethickness"] = None
+    dfields["pitch"] = pitch;
+    if (pitch) {
+      dfields["estimated_slicethickness"] = __estimate_slicethickness(
+        pitch,
+        source_to_detector_distance,
+        source_to_table_distance
+      );
+    } else {
+      dfields["estimated_slicethickness"] = null;
+    }
 
-    // if dimensions:
-    //     dfields["dimensions"] = {}
-    //     dfields["dimensions"]["width"] = width
-    //     dfields["dimensions"]["height"] = height
-    //     dfields["dimensions"]["depth"] = depth
-    //     dfields["dimensions"]["xyz"] = dimensions
+    if (dimensions) {
+      dfields["dimensions"] = {};
+      dfields["dimensions"]["width"] = width;
+      dfields["dimensions"]["height"] = height;
+      dfields["dimensions"]["depth"] = depth;
+      dfields["dimensions"]["xyz"] = dimensions;
+    }
 
-    // dfields["source"] = {}
-    // dfields["source"]["voltage"] = {}
-    // dfields["source"]["voltage"]["reported_voltage"] = reported_voltage
-    // dfields["source"]["voltage"]["actual_voltage"] = actual_voltage
-    // dfields["source"]["current"] = {}
-    // dfields["source"]["current"]["reported_current"] = reported_current
-    // dfields["source"]["current"]["actual_current"] = actual_current
-    // dfields["filter"] = _filter
-    // dfields["detector"] = {}
-    // dfields["detector"]["framerate"] = framerate
-    // dfields["calculated_Ug"] = calculated_Ug
-    // dfields["zoom_factor"] = zoom_factor
-    // dfields["projections"] = projection_count
-    // dfields["rotations"] = rotation_count
-    // dfields["frames_averaged"] = frames_averaged
-    // dfields["helical_pitch"] = helical_pitch
-    // dfields["defective_pixels"] = defective_pixels
+    dfields["source"] = {};
+    dfields["source"]["voltage"] = {};
+    dfields["source"]["voltage"]["reported_voltage"] = reported_voltage;
+    dfields["source"]["voltage"]["actual_voltage"] = actual_voltage;
+    dfields["source"]["current"] = {};
+    dfields["source"]["current"]["reported_current"] = reported_current;
+    dfields["source"]["current"]["actual_current"] = actual_current;
+    dfields["filter"] = _filter;
+    dfields["detector"] = {};
+    dfields["detector"]["framerate"] = framerate;
+    dfields["calculated_Ug"] = calculated_Ug;
+    dfields["zoom_factor"] = zoom_factor;
+    dfields["projections"] = projection_count;
+    dfields["rotations"] = rotation_count;
+    dfields["frames_averaged"] = frames_averaged;
+    dfields["helical_pitch"] = helical_pitch;
+    dfields["defective_pixels"] = defective_pixels;
 
-    // console.log(json);
     return json;
   } catch (error) {
     console.error(error);
