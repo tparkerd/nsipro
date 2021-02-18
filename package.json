@@ -3,6 +3,7 @@
   "version": "1.0.0",
   "description": "Tool that parses NSIPRO files into JSON",
   "main": "src/index.js",
+  "type": "module",
   "scripts": {
     "test": "node src/index.test.js",
     "prepublishOnly": "npm test"

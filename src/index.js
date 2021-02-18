@@ -1,32 +1,7 @@
-const xml2js = require("xml2js");
-const { parseNumbers, parseBooleans } = require("xml2js/lib/processors");
-const { DateTime } = require("luxon");
-const {
-  get_acquisition_begin,
-  get_all_keys,
-  convertShortArraysToSingleValues,
-  lookup,
-  __get_session_name,
-  __get_acquisition_begin,
-  __get_acquisition_end,
-  __get_type,
-  __get_source_to_detector_distance,
-  __get_source_to_table_distance,
-  __get_pitch,
-  __estimate_slicethickness,
-  __get_resolution,
-  __get_voltage,
-  __get_current,
-  __get_filter,
-  __get_framerate,
-  __get_calcuated_Ug,
-  __get_zoom_factor,
-  __get_projection_count,
-  __get_rotation_count,
-  __get_frames_averaged,
-  __get_helical_pitch,
-  __get_defective_pixels,
-} = require("./util.js");
+import { parseStringPromise } from "xml2js";
+import { parseNumbers, parseBooleans } from "xml2js/lib/processors";
+import { DateTime } from "luxon";
+import { convertShortArraysToSingleValues, lookup, __get_session_name, __get_acquisition_begin, __get_acquisition_end, __get_type, __get_source_to_detector_distance, __get_source_to_table_distance, __get_pitch, __estimate_slicethickness, __get_resolution, __get_voltage, __get_current, __get_filter, __get_framerate, __get_calcuated_Ug, __get_zoom_factor, __get_projection_count, __get_rotation_count, __get_frames_averaged, __get_helical_pitch, __get_defective_pixels } from "./util.js";
 
 /**
  * Converts .NSIPRO file's xml-like structure into standard XML format
@@ -114,7 +89,7 @@ const cast_dtypes = async (xml) => {
     return str;
   };
 
-  const json = await xml2js.parseStringPromise(xml, {
+  const json = await parseStringPromise(xml, {
     mergeAttrs: true,
     valueProcessors: [parseNumbers, parseBooleans, parseTimestamp],
   });
@@ -239,4 +214,5 @@ const parse = async (fname, text) => {
   }
 };
 
-exports.parse = parse;
+const _parse = parse;
+export { _parse as parse };

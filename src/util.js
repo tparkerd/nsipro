@@ -1,6 +1,6 @@
-const { DateTime } = require("luxon");
-const keysInObject = require("keys-in-object");
-const path = require("path");
+import { DateTime } from "luxon";
+import keysInObject from "keys-in-object";
+import { basename } from "path";
 
 const datetime_format = "dd-LLL-yy hh:mm:ss a";
 const datetime_format_alt = "LL/dd/kkkk hh:mm:ss a";
@@ -16,10 +16,6 @@ const lookup = (key, obj) => {
 
   // Get values of all instances in object
   values = keysInObject(obj, key);
-
-  // DEBUG
-  // console.log(`Searching for '${key}'`);
-  // console.log(values);
 
   // If the key is found...
   if (values.length > 0) {
@@ -92,7 +88,7 @@ const convertShortArraysToSingleValues = (obj) => {
  * @param {Object} json
  * @returns {String}
  */
-exports.__get_session_name = (data) => {
+export function __get_session_name(data) {
   const keys = get_all_keys(data);
   let Project_name = "";
   if ("Project_Folder" in keys) {
@@ -101,15 +97,15 @@ exports.__get_session_name = (data) => {
     Project_name = lookup("Project_folder", data);
   }
   Project_name = Project_name.replace(/\\/g, "/"); // b/c Windows
-  return path.basename(Project_name);
-};
+  return basename(Project_name);
+}
 
 /**
  * Extracts the acquisition begin value
  * @param {Object} json Contents of .NSIPRO in JSON format
  * @returns {DateTime} start time of acquisition
  */
-exports.__get_acquisition_begin = (data) => {
+export function __get_acquisition_begin(data) {
   // Start time for scan
   if (
     "acquisition_begin" in
@@ -132,14 +128,14 @@ exports.__get_acquisition_begin = (data) => {
     acquisition_begin = data["NSI_Reconstruction_Project"]["Creation_Date"];
   }
   return new DateTime(acquisition_begin);
-};
+}
 
-exports.__get_acquisition_end = (data) => {
+export function __get_acquisition_end(data) {
   // End time for scan
   return keysInObject(data, "acquisition_end")[0];
-};
+}
 
-exports.__get_type = (data) => {
+export function __get_type(data) {
   // There's a chance that this returns an empty list, so make sure to
   // check for truthy values before returning. Reminder: an empty list is
   // falsy
@@ -198,9 +194,9 @@ exports.__get_type = (data) => {
 
   // IF we reach here, no scan type could be found
   return [null, null];
-};
+}
 
-exports.__get_source_to_detector_distance = (data) => {
+export function __get_source_to_detector_distance(data) {
   const tag =
     data["NSI_Reconstruction_Project"]["CT_Project_Configuration"][
       "Technique_Configuration"
@@ -211,18 +207,18 @@ exports.__get_source_to_detector_distance = (data) => {
   } else {
     console.error("Couldn't find the source to detector distance");
   }
-};
+}
 
-exports.__get_source_to_table_distance = (data) => {
+export function __get_source_to_table_distance(data) {
   const tag =
     data["NSI_Reconstruction_Project"]["CT_Project_Configuration"][
       "Technique_Configuration"
     ]["Setup"];
   if (Object.keys(tag).includes("source_to_table_distance"))
     return tag["source_to_table_distance"];
-};
+}
 
-exports.__get_pitch = (data) => {
+export function __get_pitch(data) {
   const tag =
     data["NSI_Reconstruction_Project"]["CT_Project_Configuration"][
       "Technique_Configuration"
@@ -231,20 +227,20 @@ exports.__get_pitch = (data) => {
     let value = lookup("det_pitch", tag["Ug"]);
     if (value) return value;
   }
-};
+}
 
-exports.__estimate_slicethickness = (
+export function __estimate_slicethickness(
   pitch,
   source_to_detector_distance,
   source_to_table_distance
-) => {
+) {
   if (pitch && source_to_detector_distance && source_to_table_distance) {
     return (pitch / source_to_detector_distance) * source_to_table_distance;
   }
   console.warn("Could not estimate slice thickness");
-};
+}
 
-exports.__get_resolution = (data) => {
+export function __get_resolution(data) {
   const tag = data["NSI_Reconstruction_Project"];
   // When a recon has been done
   if (Object.keys(tag).includes("Volume")) {
@@ -253,7 +249,7 @@ exports.__get_resolution = (data) => {
     let [w, d, h] = dimentions;
     return [w, h, d];
   }
-};
+}
 
 // def __get_voltage():
 // reported_voltage = lookup("kV",  data["NSI_Reconstruction_Project"]["CT_Project_Configuration"]["Technique_Configuration"])
@@ -263,7 +259,7 @@ exports.__get_resolution = (data) => {
 //     actual_voltage = None
 // return reported_voltage, actual_voltage
 
-exports.__get_voltage = (data) => {
+export function __get_voltage(data) {
   const tag =
     data["NSI_Reconstruction_Project"]["CT_Project_Configuration"][
       "Technique_Configuration"
@@ -274,9 +270,9 @@ exports.__get_voltage = (data) => {
   // Edge case: sometimes an actual voltage is not recorded, so use the reported one instead
   if (!actual_voltage) actual_voltage = null;
   return [reported_voltage, actual_voltage];
-};
+}
 
-exports.__get_current = (data) => {
+export function __get_current(data) {
   const tag =
     data["NSI_Reconstruction_Project"]["CT_Project_Configuration"][
       "Technique_Configuration"
@@ -287,25 +283,24 @@ exports.__get_current = (data) => {
 
   if (!actual_current) actual_current = null;
   return [reported_current, actual_current];
-};
+}
 
 // NOTE(tparker): I'm not 100% sure that this is the actual filter that the technicians report
-exports.__get_filter = (data) => {
+export function __get_filter(data) {
   const tag =
     data["NSI_Reconstruction_Project"]["CT_Project_Configuration"][
       "Technique_Configuration"
     ];
   return lookup("phys_filter", tag);
-};
+}
 
-exports.__get_framerate = (data) =>
-  lookup(
+export function __get_framerate(data)  {   return lookup(
     "fps",
     data["NSI_Reconstruction_Project"]["CT_Project_Configuration"][
       "Technique_Configuration"
     ]["Detector"]
-  );
-exports.__get_calcuated_Ug = (data) => {
+  );   }
+export function __get_calcuated_Ug(data) {
   const tag =
     data["NSI_Reconstruction_Project"]["CT_Project_Configuration"][
       "Technique_Configuration"
@@ -327,8 +322,8 @@ exports.__get_calcuated_Ug = (data) => {
       }
     }
   }
-};
-exports.__get_zoom_factor = (data) => {
+}
+export function __get_zoom_factor(data) {
   const tag =
     data["NSI_Reconstruction_Project"]["CT_Project_Configuration"][
       "Technique_Configuration"
@@ -337,11 +332,11 @@ exports.__get_zoom_factor = (data) => {
     let value = lookup("zoom_factor_text", tag["Ug"]);
     if (value) return parseFloat(value.slice(1)); // remove surrounding parentheses and units (in pixels)
   }
-};
-exports.__get_projection_count = (data) => {
+}
+export function __get_projection_count(data) {
   return lookup("Number_of_projections");
-};
-exports.__get_rotation_count = (data) => {
+}
+export function __get_rotation_count(data) {
   // only applies to VorteX scans
   const tag = data["NSI_Reconstruction_Project"]["CT_Project_Configuration"];
   if (Object.keys(tag).includes("VorteX")) {
@@ -349,11 +344,11 @@ exports.__get_rotation_count = (data) => {
     if (vortex_metadata && vortex_metadata.includes("Revs"))
       return vortex_metadata["Revs"];
   }
-};
-exports.__get_frames_averaged = (data) => {
+}
+export function __get_frames_averaged(data) {
   return lookup("Frame_averaging", data);
-};
-exports.__get_helical_pitch = (data) => {
+}
+export function __get_helical_pitch(data) {
   const tag = data["NSI_Reconstruction_Project"]["CT_Project_Configuration"];
   if (Object.keys(tag).includes("VorteX")) {
     let vortex_metadata = tag["VorteX"];
@@ -361,8 +356,8 @@ exports.__get_helical_pitch = (data) => {
       return vortex_metadata["Pitch"];
     }
   }
-};
-exports.__get_defective_pixels = (data) => {
+}
+export function __get_defective_pixels(data) {
   let statuses = lookup("status", data);
   if (statuses instanceof String || typeof statuses === "string") {
     statuses = [statuses];
@@ -374,8 +369,11 @@ exports.__get_defective_pixels = (data) => {
       return parseInt(m.groups.pixel_count);
     }
   }
-};
+}
 
-exports.lookup = lookup;
-exports.get_all_keys = get_all_keys;
-exports.convertShortArraysToSingleValues = convertShortArraysToSingleValues;
+const _lookup = lookup;
+export { _lookup as lookup };
+const _get_all_keys = get_all_keys;
+export { _get_all_keys as get_all_keys };
+const _convertShortArraysToSingleValues = convertShortArraysToSingleValues;
+export { _convertShortArraysToSingleValues as convertShortArraysToSingleValues };
