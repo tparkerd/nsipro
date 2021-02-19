@@ -1,6 +1,6 @@
 import { DateTime } from "luxon";
-import keysInObject from "keys-in-object";
 import { basename } from "path";
+import keysInObject from "keys-in-object";
 
 const datetime_format = "dd-LLL-yy hh:mm:ss a";
 const datetime_format_alt = "LL/dd/kkkk hh:mm:ss a";
@@ -294,12 +294,14 @@ export function __get_filter(data) {
   return lookup("phys_filter", tag);
 }
 
-export function __get_framerate(data)  {   return lookup(
+export function __get_framerate(data) {
+  return lookup(
     "fps",
     data["NSI_Reconstruction_Project"]["CT_Project_Configuration"][
       "Technique_Configuration"
     ]["Detector"]
-  );   }
+  );
+}
 export function __get_calcuated_Ug(data) {
   const tag =
     data["NSI_Reconstruction_Project"]["CT_Project_Configuration"][

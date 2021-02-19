@@ -1,7 +1,31 @@
-import { parseStringPromise } from "xml2js";
-import { parseNumbers, parseBooleans } from "xml2js/lib/processors";
+import {
+  __estimate_slicethickness,
+  __get_acquisition_begin,
+  __get_acquisition_end,
+  __get_calcuated_Ug,
+  __get_current,
+  __get_defective_pixels,
+  __get_filter,
+  __get_framerate,
+  __get_frames_averaged,
+  __get_helical_pitch,
+  __get_pitch,
+  __get_projection_count,
+  __get_resolution,
+  __get_rotation_count,
+  __get_session_name,
+  __get_source_to_detector_distance,
+  __get_source_to_table_distance,
+  __get_type,
+  __get_voltage,
+  __get_zoom_factor,
+  convertShortArraysToSingleValues,
+  lookup,
+} from "./util.js";
+import { parseBooleans, parseNumbers } from "xml2js/lib/processors.js";
+
 import { DateTime } from "luxon";
-import { convertShortArraysToSingleValues, lookup, __get_session_name, __get_acquisition_begin, __get_acquisition_end, __get_type, __get_source_to_detector_distance, __get_source_to_table_distance, __get_pitch, __estimate_slicethickness, __get_resolution, __get_voltage, __get_current, __get_filter, __get_framerate, __get_calcuated_Ug, __get_zoom_factor, __get_projection_count, __get_rotation_count, __get_frames_averaged, __get_helical_pitch, __get_defective_pixels } from "./util.js";
+import { parseStringPromise } from "xml2js";
 
 /**
  * Converts .NSIPRO file's xml-like structure into standard XML format
@@ -9,15 +33,15 @@ import { convertShortArraysToSingleValues, lookup, __get_session_name, __get_acq
  * @returns {string} XML representation of NSIPRO file format
  */
 const standardize = (text) => {
-  tag_pattern = /<(?<content>[^<>]+)>/g;
+  const tag_pattern = /<(?<content>[^<>]+)>/g;
 
   // Edge case: <ug text> can have the pixel value on the following line
-  ug_text_pattern = /\s+(?<ug_text>\(\S+\s+pixels\))$/gm;
-  ug_text_fixed = " $1";
+  const ug_text_pattern = /\s+(?<ug_text>\(\S+\s+pixels\))$/gm;
+  const ug_text_fixed = " $1";
   text = text.replace(ug_text_pattern, ug_text_fixed);
 
   // Split the text into individual lines
-  lines = text.split(/\r?\n\s*/);
+  let lines = text.split(/\r?\n\s*/);
 
   // Remove spaces within tags
   lines = lines.map((line) => {
@@ -27,8 +51,8 @@ const standardize = (text) => {
   });
 
   // Close single-line tags
-  open_tag_pattern = /^<(?<tag>[^>]+)>(?<value>[^<]+)$/;
-  close_tags = "<$<tag>>$<value></$<tag>>";
+  const open_tag_pattern = /^<(?<tag>[^>]+)>(?<value>[^<]+)$/;
+  const close_tags = "<$<tag>>$<value></$<tag>>";
   lines = lines.map((line) => {
     return line.replace(open_tag_pattern, close_tags);
   });
