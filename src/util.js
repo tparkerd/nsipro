@@ -105,35 +105,40 @@ export function __get_session_name(data) {
  * @param {Object} json Contents of .NSIPRO in JSON format
  * @returns {DateTime} start time of acquisition
  */
-export function __get_acquisition_begin(data) {
+export function __get_acquisition_start(data) {
   // Start time for scan
-  let acquisition_begin;
-  if (
-    "acquisition_begin" in
-    Object.keys(data["NSI_Reconstruction_Project"]["CT_Project_Configuration"])
-  ) {
-    acquisition_begin =
-      data["NSI_Reconstruction_Project"]["CT_Project_Configuration"][
-        "acquisition_begin"
-      ];
+  let acquisition_start;
 
-    // Edge case: Very rarely, the NSI software may record the
-    //   acquisition time more than once
-    if (acquisition_begin instanceof Array) {
-      unique_timestamps = Array.from(new Set(acquisition_begin));
-      if (unique_timestamps.length == 1) {
-        acquisition_begin = unique_timestamps[0];
-      }
-    }
+  if (
+    Object.keys(data["NSI_Reconstruction_Project"]).includes("Creation_Date")
+  ) {
+    acquisition_start = data["NSI_Reconstruction_Project"]["Creation_Date"];
   } else {
-    acquisition_begin = data["NSI_Reconstruction_Project"]["Creation_Date"];
+    console.error("Creation date could not be located.");
   }
-  return new DateTime(acquisition_begin);
+  return new DateTime(acquisition_start);
 }
 
-export function __get_acquisition_end(data) {
+export function __get_acquisition_finish(data) {
   // End time for scan
-  return keysInObject(data, "acquisition_end")[0];
+  let acquisition_finish;
+  let pattern = /(^.*scan.*completed.*)(?<timestamp>\d{2}\-\w{3}\-\d+\s+\d+\:\d+\:\d+\s+[AP]M)/i;
+  if (Object.keys(data["NSI_Reconstruction_Project"]).includes("Comments")) {
+    let comments = keysInObject(data["NSI_Reconstruction_Project"], "Comments");
+    if (comments instanceof String || typeof comments === "string") {
+      comments = [comments];
+    }
+    console.log(`comments=${comments}`);
+    for (let comment of comments) {
+      let match = comment.match(pattern);
+      acquisition_finish = match.groups.timestamp;
+      acquisition_finish = DateTime.fromFormat(
+        acquisition_finish,
+        datetime_format
+      );
+      return acquisition_finish;
+    }
+  }
 }
 
 export function __get_type(data) {

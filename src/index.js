@@ -1,7 +1,7 @@
 import {
   __estimate_slicethickness,
-  __get_acquisition_begin,
-  __get_acquisition_end,
+  __get_acquisition_finish,
+  __get_acquisition_start,
   __get_calcuated_Ug,
   __get_current,
   __get_defective_pixels,
@@ -137,10 +137,11 @@ const parse = async (fname, text) => {
 
     // Collate key-value pairs of interest
     let session_name = __get_session_name(json);
-    let acquisition_begin = __get_acquisition_begin(json);
-    let acquisition_end = __get_acquisition_end(json);
-    let acquisition_duration = acquisition_end.diff(
-      acquisition_begin,
+    // TODO: It appears acquisition begin/end are for the flat field, not the individual scan, so you gotta get that from creation date and comments
+    let acquisition_start = __get_acquisition_start(json);
+    let acquisition_finish = __get_acquisition_finish(json);
+    let acquisition_duration = acquisition_finish.diff(
+      acquisition_start,
       "seconds"
     ); // duration as datetime object
     let uid = lookup("Part_name", json); // the 'part name' entered by technician
@@ -179,8 +180,8 @@ const parse = async (fname, text) => {
 
     // Scan Duration (acquisition)
     // ISO format: YYYY-MM-DDThh:mm:ssTZD
-    dfields["acquisition_begin"] = acquisition_begin;
-    dfields["acquisition_end"] = acquisition_end;
+    dfields["acquisition_start"] = acquisition_start;
+    dfields["acquisition_finish"] = acquisition_finish;
     dfields["acquisition_duration"] = acquisition_duration.seconds;
 
     // Identifiers

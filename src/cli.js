@@ -53,7 +53,6 @@ const getFilesByExtension = (filepath, extension) => {
 
   // Base case: no more children directories
   if (directories.length === 0) {
-    console.log(`Leaf node: ${filepath}`);
     return files;
   }
 
