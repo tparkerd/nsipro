@@ -15,7 +15,7 @@ const lookup = (key, obj) => {
   if (!(obj instanceof Object || typeof obj === "object")) return;
 
   // Get values of all instances in object
-  values = keysInObject(obj, key);
+  let values = keysInObject(obj, key);
 
   // If the key is found...
   if (values.length > 0) {
@@ -46,7 +46,7 @@ const get_all_keys_helper = (obj) => {
   )
     return [];
 
-  keys = [];
+  let keys = [];
   for (let key of Object.keys(obj)) {
     // Add the current key
     keys = keys.concat([key]);
@@ -73,7 +73,7 @@ const get_all_keys = (obj) => {
 const convertShortArraysToSingleValues = (obj) => {
   const keys = Object.keys(obj);
   for (const key of keys) {
-    value = obj[key];
+    let value = obj[key];
     if (value instanceof Array && value.length === 1) {
       obj[key] = value[0];
     }
@@ -107,6 +107,7 @@ export function __get_session_name(data) {
  */
 export function __get_acquisition_begin(data) {
   // Start time for scan
+  let acquisition_begin;
   if (
     "acquisition_begin" in
     Object.keys(data["NSI_Reconstruction_Project"]["CT_Project_Configuration"])
@@ -162,14 +163,14 @@ export function __get_type(data) {
     let comments = lookup("Comments", data);
     if (comments) {
       categories.push("Helical");
-      pattern = /^(?<scan_type>.*) scan completed .*$/;
+      let pattern = /^(?<scan_type>.*) scan completed .*$/;
       // Since more than one comment could be returned, just assume
       // that it should be a list. So create a list of a single value
       // if just a string is found
       if (comments instanceof String || typeof comments === "string") {
         comments = [comments];
       }
-      for (comment of comments) {
+      for (let comment of comments) {
         let m = comment.match(pattern);
         if (m) {
           if ("scan_type" in m.groups) {
@@ -245,7 +246,7 @@ export function __get_resolution(data) {
   // When a recon has been done
   if (Object.keys(tag).includes("Volume")) {
     let dimensions = lookup("resolution", tag["Volume"]);
-    dimentions = dimensions.split(/\s+/);
+    let dimentions = dimensions.split(/\s+/);
     let [w, d, h] = dimentions;
     return [w, h, d];
   }
@@ -314,9 +315,9 @@ export function __get_calcuated_Ug(data) {
     }
   }
 
-  value = lookup("ug_text", tag["Ug"]);
+  let value = lookup("ug_text", tag["Ug"]);
   if (value) {
-    pattern = /^.*\((?<value>\S+)\s+pixels\)$/;
+    let pattern = /^.*\((?<value>\S+)\s+pixels\)$/;
     let m = value.match(pattern);
     if (m) {
       if (value in m.groups) {
@@ -364,7 +365,7 @@ export function __get_defective_pixels(data) {
   if (statuses instanceof String || typeof statuses === "string") {
     statuses = [statuses];
   }
-  for (status of statuses) {
+  for (let status of statuses) {
     let pattern = /^(?<pixel_count>\d+) defective .*$/;
     let m = status.match(pattern);
     if ("pixel_count" in m.groups) {

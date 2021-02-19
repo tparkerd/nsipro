@@ -174,7 +174,7 @@ const parse = async (fname, text) => {
     let defective_pixels = __get_defective_pixels(json);
 
     json["derived_fields"] = {};
-    dfields = json["derived_fields"];
+    let dfields = json["derived_fields"];
     dfields["nsipro_filepath"] = fname;
 
     // Scan Duration (acquisition)
