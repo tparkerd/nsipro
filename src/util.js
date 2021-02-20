@@ -2,8 +2,8 @@ import { DateTime } from "luxon";
 import { basename } from "path";
 import keysInObject from "keys-in-object";
 
-const datetime_format = "dd-LLL-yy hh:mm:ss a";
-const datetime_format_alt = "LL/dd/kkkk hh:mm:ss a";
+const datetime_format = "dd-LLL-yy h:mm:ss a";
+const datetime_format_alt = "LL/dd/yyyy h:mm:ss a";
 
 /**
  *
@@ -116,27 +116,48 @@ export function __get_acquisition_start(data) {
   } else {
     console.error("Creation date could not be located.");
   }
-  return new DateTime(acquisition_start);
+
+  // If the earlier steps were able to convert into a datatime object,
+  // just return that.
+  if (acquisition_start instanceof DateTime) return acquisition_start;
+
+  let dt;
+  let str = acquisition_start;
+  // There are two possible formats used, depending on the NSI software version
+  dt = DateTime.fromFormat(str, datetime_format);
+  if (dt.isValid) return dt;
+
+  // Example: 12/14/2016 10:59:24 AM
+  // month/day/year hour:minute:second meridiem
+  dt = DateTime.fromFormat(str, datetime_format_alt);
+  if (dt.isValid) return dt;
+
+  return dt;
 }
 
 export function __get_acquisition_finish(data) {
   // End time for scan
-  let acquisition_finish;
+  let dt;
   let pattern = /(^.*scan.*completed.*)(?<timestamp>\d{2}\-\w{3}\-\d+\s+\d+\:\d+\:\d+\s+[AP]M)/i;
   if (Object.keys(data["NSI_Reconstruction_Project"]).includes("Comments")) {
     let comments = keysInObject(data["NSI_Reconstruction_Project"], "Comments");
     if (comments instanceof String || typeof comments === "string") {
       comments = [comments];
     }
-    console.log(`comments=${comments}`);
     for (let comment of comments) {
+      if (typeof comment === "undefined") continue;
       let match = comment.match(pattern);
-      acquisition_finish = match.groups.timestamp;
-      acquisition_finish = DateTime.fromFormat(
-        acquisition_finish,
-        datetime_format
-      );
-      return acquisition_finish;
+      let str = match.groups.timestamp;
+      // There are two possible formats used, depending on the NSI software version
+      dt = DateTime.fromFormat(str, datetime_format);
+      if (dt.isValid) return dt;
+
+      // Example: 12/14/2016 10:59:24 AM
+      // month/day/year hour:minute:second meridiem
+      dt = DateTime.fromFormat(str, datetime_format_alt);
+      if (dt.isValid) return dt;
+
+      return dt;
     }
   }
 }
@@ -346,10 +367,11 @@ export function __get_projection_count(data) {
 }
 export function __get_rotation_count(data) {
   // only applies to VorteX scans
+  let vortex_metadata;
   const tag = data["NSI_Reconstruction_Project"]["CT_Project_Configuration"];
   if (Object.keys(tag).includes("VorteX")) {
-    let vortex_metadata = tag["VorteX"];
-    if (vortex_metadata && vortex_metadata.includes("Revs"))
+    vortex_metadata = tag["VorteX"];
+    if (vortex_metadata && Object.keys(vortex_metadata).includes("Revs"))
       return vortex_metadata["Revs"];
   }
 }
@@ -360,23 +382,28 @@ export function __get_helical_pitch(data) {
   const tag = data["NSI_Reconstruction_Project"]["CT_Project_Configuration"];
   if (Object.keys(tag).includes("VorteX")) {
     let vortex_metadata = tag["VorteX"];
-    if (vortex_metadata && vortex_metadata.includes("Pitch")) {
+    if (vortex_metadata && Object.keys(vortex_metadata).includes("Pitch")) {
       return vortex_metadata["Pitch"];
     }
   }
 }
 export function __get_defective_pixels(data) {
   let statuses = lookup("status", data);
-  if (statuses instanceof String || typeof statuses === "string") {
+  if (!Array.isArray(statuses)) {
     statuses = [statuses];
   }
   for (let status of statuses) {
-    let pattern = /^(?<pixel_count>\d+) defective .*$/;
+    // Edge case: no status or defective pixels were reported/recorded
+    if (!status) {
+      continue;
+    }
+    let pattern = /(?<pixel_count>\d+)\s+defective .*$/i;
     let m = status.match(pattern);
-    if ("pixel_count" in m.groups) {
+    if (m && "pixel_count" in m.groups) {
       return parseInt(m.groups.pixel_count);
     }
   }
+  return null;
 }
 
 const _lookup = lookup;

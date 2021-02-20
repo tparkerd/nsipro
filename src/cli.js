@@ -1,6 +1,7 @@
 #!/usr/bin/env node
 
 import { ArgumentParser } from "argparse";
+import cliProgress from "cli-progress";
 import fs from "fs";
 import getPackageVersion from "@jsbits/get-package-version";
 import { initializeLog } from "./log.js";
@@ -31,7 +32,7 @@ parser.add_argument("path", {
 
 let args = parser.parse_args();
 const logger = initializeLog(args);
-logger.info(args);
+logger.debug(args);
 
 const getFilesByExtension = (filepath, extension) => {
   // return collectFiles(filepath, extension);
@@ -70,7 +71,7 @@ if (args.path) {
   for (let p of args.path) {
     // Resolve filepath
     let fpath = fs.realpathSync(p);
-    logger.info(`fpath='${fpath}'`);
+    logger.debug(`fpath='${fpath}'`);
     let fstats = fs.statSync(fpath);
     //    a) If a single file, continue
     if (fstats.isFile()) {
@@ -95,6 +96,15 @@ if (args.path) {
   }
 
   // 3. Iterate over each file
+  // Define progress bar
+  const pbarOpts = {
+    format: "progress [{bar}] {percentage}% | ETA: {eta}s | {value}/{total}",
+  };
+  const pbar = new cliProgress.SingleBar(
+    {},
+    cliProgress.Presets.shades_classic
+  );
+  pbar.start(files.length, 0, { speed: "N/A" });
   for (let fp of files) {
     try {
       //    a) open (maybe many at once to parallel)
@@ -102,9 +112,13 @@ if (args.path) {
       // console.log(nsipro_contents);
       //    b) parse file contents
       let res = await parse(fp, nsipro_contents);
-      console.log(JSON.stringify(res, null, 2));
+      pbar.increment();
+      // console.log(JSON.stringify(res, null, 2));
     } catch (error) {
-      throw error;
+      console.error(error);
+      console.error(fp);
+      // throw error;
     }
   }
+  pbar.stop();
 }

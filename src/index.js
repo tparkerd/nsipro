@@ -50,6 +50,20 @@ const standardize = (text) => {
     });
   });
 
+  // Prefix any tags that start with number with underscore
+  const numeric_initial_pattern = /^\d/;
+  let replacement = "_$<content>";
+  lines = lines.map((line) => {
+    // If it has a numeric initial, insert an underscore
+    return line.replace(tag_pattern, (match, content, offset, string) => {
+      if (numeric_initial_pattern.test(content)) {
+        let t = match.replace(tag_pattern, replacement);
+        return t;
+      }
+      return match;
+    });
+  });
+
   // Close single-line tags
   const open_tag_pattern = /^<(?<tag>[^>]+)>(?<value>[^<]+)$/;
   const close_tags = "<$<tag>>$<value></$<tag>>";
@@ -65,6 +79,12 @@ const standardize = (text) => {
   // Edge case: <phys_filter> can have a null value
   lines = lines.map((line) => {
     return line.replace(/^<phys_filter>$/, "<phys_filter></phys_filter>");
+  });
+
+  // Edge case: <serial> can have a null value
+  lines = lines.map((line) => {
+    return line.replace(/^<serial>$/, "<serial></serial>");
+    return line.replace();
   });
 
   // Edge case: <Software> can have a null value
@@ -102,11 +122,13 @@ const cast_dtypes = async (xml) => {
     let dt;
 
     // There are two possible formats used, depending on the NSI software version
-    const datetime_format = "dd-LLL-yy hh:mm:ss a";
+    const datetime_format = "dd-LLL-yy h:mm:ss a";
     dt = DateTime.fromFormat(str, datetime_format);
     if (dt.isValid) return dt;
 
-    const datetime_format_alt = "LL/dd/kkkk hh:mm:ss a";
+    // Example: 12/14/2016 10:59:24 AM
+    // month/day/year hour:minute:second meridiem
+    const datetime_format_alt = "LL/dd/yyyy h:mm:ss a";
     dt = DateTime.fromFormat(str, datetime_format_alt);
     if (dt.isValid) return dt;
 
@@ -137,7 +159,6 @@ const parse = async (fname, text) => {
 
     // Collate key-value pairs of interest
     let session_name = __get_session_name(json);
-    // TODO: It appears acquisition begin/end are for the flat field, not the individual scan, so you gotta get that from creation date and comments
     let acquisition_start = __get_acquisition_start(json);
     let acquisition_finish = __get_acquisition_finish(json);
     let acquisition_duration = acquisition_finish.diff(
@@ -235,7 +256,10 @@ const parse = async (fname, text) => {
 
     return json;
   } catch (error) {
-    console.error(error);
+    // console.error(error);
+    let xml = standardize(text);
+    console.error(xml);
+    throw error;
   }
 };
 
