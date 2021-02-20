@@ -1,6 +1,8 @@
 import { DateTime } from "luxon";
 import { basename } from "path";
+import fs from "fs";
 import keysInObject from "keys-in-object";
+import path from "path";
 
 const datetime_format = "dd-LLL-yy h:mm:ss a";
 const datetime_format_alt = "LL/dd/yyyy h:mm:ss a";
@@ -404,6 +406,81 @@ export function __get_defective_pixels(data) {
     }
   }
   return null;
+}
+
+export function tabulateJson(data) {
+  const bf = data["NSI_Reconstruction_Project"]; // base fields
+  const df = data["derived_fields"]; // derived fields
+  const {
+    uid,
+    acquisition_duration,
+    scan_type,
+    scan_type_category,
+    source_to_detector_distance,
+    source_to_table_distance,
+    pitch,
+    estimated_slicethickness,
+    filter,
+    zoom_factor,
+    frames_averaged,
+    defective_pixels,
+  } = df;
+  const name = df["uid"];
+  const projectname = df["session_name"];
+  const efx_dr_version = df["acquisition_software_version"];
+  const source = df["source"];
+  const source_voltage_reported = source["voltage"]["reported_voltage"];
+  const source_voltage_actual = source["voltage"]["actual_voltage"];
+  const source_current_reported = source["current"]["reported_current"];
+  const source_current_actual = source["current"]["actual_current"];
+
+  let result = {
+    uid,
+    acquisition_duration,
+    scan_type,
+    scan_type_category,
+    source_to_detector_distance,
+    source_to_table_distance,
+    pitch,
+    estimated_slicethickness,
+    filter,
+    zoom_factor,
+    frames_averaged,
+    defective_pixels,
+    name,
+    projectname,
+    efx_dr_version,
+    source_voltage_reported,
+    source_voltage_actual,
+    source_current_reported,
+    source_current_actual,
+  };
+
+  // Convert datetime objects to ISO strings
+  const acquisition_start = df["acquisition_start"].toJSON();
+  const acquisition_finish = df["acquisition_finish"].toJSON();
+  result = { acquisition_start, acquisition_finish, ...result };
+
+  // Clean up null and undefined
+  for (let key of Object.keys(result)) {
+    if (result[key] === "" || result[key] === undefined) {
+      result[key] = null;
+    }
+  }
+
+  // Dimensions may not be present. It may only be present when individually
+  // reconstructed or individually exported.
+  if (Object.keys(df).includes("dimensions")) {
+    const { width, height, depth } = df["dimensions"];
+    result = {
+      ...result,
+      width,
+      height,
+      depth,
+    };
+  }
+
+  return result;
 }
 
 const _lookup = lookup;

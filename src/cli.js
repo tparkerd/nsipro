@@ -5,8 +5,11 @@ import cliProgress from "cli-progress";
 import fs from "fs";
 import getPackageVersion from "@jsbits/get-package-version";
 import { initializeLog } from "./log.js";
+import json_2_csv from "json-2-csv";
 import { parse } from "./index.js";
 import path from "path";
+import { tabulateJson } from "./util.js";
+const { json2csv } = json_2_csv;
 
 const version = getPackageVersion();
 const parser = new ArgumentParser({
@@ -84,6 +87,8 @@ if (args.path) {
     }
   }
 
+  let ofp = `${path.basename(args.path[0])}.csv`;
+
   // 2. Standardize and clean up file list
   //    a) remove duplicate entries
   files = [...new Set(files)];
@@ -97,6 +102,7 @@ if (args.path) {
 
   // 3. Iterate over each file
   // Define progress bar
+  const df = [];
   const pbarOpts = {
     format: "progress [{bar}] {percentage}% | ETA: {eta}s | {value}/{total}",
   };
@@ -111,14 +117,28 @@ if (args.path) {
       const nsipro_contents = fs.readFileSync(fp, "utf8");
       // console.log(nsipro_contents);
       //    b) parse file contents
-      let res = await parse(fp, nsipro_contents);
+      let nsipro_json = await parse(fp, nsipro_contents);
+      // Add to all results
+      // df.push(nsipro_json);
+      let simplified_nsipro = tabulateJson(nsipro_json);
+      df.push(simplified_nsipro);
+      logger.debug(simplified_nsipro);
       pbar.increment();
-      // console.log(JSON.stringify(res, null, 2));
     } catch (error) {
       console.error(error);
-      console.error(fp);
-      // throw error;
     }
   }
   pbar.stop();
+
+  // Convert to CSV
+  json2csv(df, (err, csv) => {
+    if (err) throw err;
+
+    // Success! Write to file!
+    fs.writeFileSync(ofp, csv, "utf8", (err) => {
+      if (err) throw err;
+    });
+    logger.info(`Saved '${ofp}'`);
+  });
+  // console.log(df);
 }
