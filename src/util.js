@@ -1,9 +1,11 @@
-const { DateTime } = require("luxon");
-const keysInObject = require("keys-in-object");
-const path = require("path");
+import { DateTime } from "luxon";
+import { basename } from "path";
+import fs from "fs";
+import keysInObject from "keys-in-object";
+import path from "path";
 
-const datetime_format = "dd-LLL-yy hh:mm:ss a";
-const datetime_format_alt = "LL/dd/kkkk hh:mm:ss a";
+const datetime_format = "dd-LLL-yy h:mm:ss a";
+const datetime_format_alt = "LL/dd/yyyy h:mm:ss a";
 
 /**
  *
@@ -15,11 +17,7 @@ const lookup = (key, obj) => {
   if (!(obj instanceof Object || typeof obj === "object")) return;
 
   // Get values of all instances in object
-  values = keysInObject(obj, key);
-
-  // DEBUG
-  // console.log(`Searching for '${key}'`);
-  // console.log(values);
+  let values = keysInObject(obj, key);
 
   // If the key is found...
   if (values.length > 0) {
@@ -50,7 +48,7 @@ const get_all_keys_helper = (obj) => {
   )
     return [];
 
-  keys = [];
+  let keys = [];
   for (let key of Object.keys(obj)) {
     // Add the current key
     keys = keys.concat([key]);
@@ -77,7 +75,7 @@ const get_all_keys = (obj) => {
 const convertShortArraysToSingleValues = (obj) => {
   const keys = Object.keys(obj);
   for (const key of keys) {
-    value = obj[key];
+    let value = obj[key];
     if (value instanceof Array && value.length === 1) {
       obj[key] = value[0];
     }
@@ -92,7 +90,7 @@ const convertShortArraysToSingleValues = (obj) => {
  * @param {Object} json
  * @returns {String}
  */
-exports.__get_session_name = (data) => {
+export function __get_session_name(data) {
   const keys = get_all_keys(data);
   let Project_name = "";
   if ("Project_Folder" in keys) {
@@ -101,45 +99,72 @@ exports.__get_session_name = (data) => {
     Project_name = lookup("Project_folder", data);
   }
   Project_name = Project_name.replace(/\\/g, "/"); // b/c Windows
-  return path.basename(Project_name);
-};
+  return basename(Project_name);
+}
 
 /**
  * Extracts the acquisition begin value
  * @param {Object} json Contents of .NSIPRO in JSON format
  * @returns {DateTime} start time of acquisition
  */
-exports.__get_acquisition_begin = (data) => {
+export function __get_acquisition_start(data) {
   // Start time for scan
+  let acquisition_start;
+
   if (
-    "acquisition_begin" in
-    Object.keys(data["NSI_Reconstruction_Project"]["CT_Project_Configuration"])
+    Object.keys(data["NSI_Reconstruction_Project"]).includes("Creation_Date")
   ) {
-    acquisition_begin =
-      data["NSI_Reconstruction_Project"]["CT_Project_Configuration"][
-        "acquisition_begin"
-      ];
-
-    // Edge case: Very rarely, the NSI software may record the
-    //   acquisition time more than once
-    if (acquisition_begin instanceof Array) {
-      unique_timestamps = Array.from(new Set(acquisition_begin));
-      if (unique_timestamps.length == 1) {
-        acquisition_begin = unique_timestamps[0];
-      }
-    }
+    acquisition_start = data["NSI_Reconstruction_Project"]["Creation_Date"];
   } else {
-    acquisition_begin = data["NSI_Reconstruction_Project"]["Creation_Date"];
+    console.error("Creation date could not be located.");
   }
-  return new DateTime(acquisition_begin);
-};
 
-exports.__get_acquisition_end = (data) => {
+  // If the earlier steps were able to convert into a datatime object,
+  // just return that.
+  if (acquisition_start instanceof DateTime) return acquisition_start;
+
+  let dt;
+  let str = acquisition_start;
+  // There are two possible formats used, depending on the NSI software version
+  dt = DateTime.fromFormat(str, datetime_format);
+  if (dt.isValid) return dt;
+
+  // Example: 12/14/2016 10:59:24 AM
+  // month/day/year hour:minute:second meridiem
+  dt = DateTime.fromFormat(str, datetime_format_alt);
+  if (dt.isValid) return dt;
+
+  return dt;
+}
+
+export function __get_acquisition_finish(data) {
   // End time for scan
-  return keysInObject(data, "acquisition_end")[0];
-};
+  let dt;
+  let pattern = /(^.*scan.*completed.*)(?<timestamp>\d{2}\-\w{3}\-\d+\s+\d+\:\d+\:\d+\s+[AP]M)/i;
+  if (Object.keys(data["NSI_Reconstruction_Project"]).includes("Comments")) {
+    let comments = keysInObject(data["NSI_Reconstruction_Project"], "Comments");
+    if (comments instanceof String || typeof comments === "string") {
+      comments = [comments];
+    }
+    for (let comment of comments) {
+      if (typeof comment === "undefined") continue;
+      let match = comment.match(pattern);
+      let str = match.groups.timestamp;
+      // There are two possible formats used, depending on the NSI software version
+      dt = DateTime.fromFormat(str, datetime_format);
+      if (dt.isValid) return dt;
 
-exports.__get_type = (data) => {
+      // Example: 12/14/2016 10:59:24 AM
+      // month/day/year hour:minute:second meridiem
+      dt = DateTime.fromFormat(str, datetime_format_alt);
+      if (dt.isValid) return dt;
+
+      return dt;
+    }
+  }
+}
+
+export function __get_type(data) {
   // There's a chance that this returns an empty list, so make sure to
   // check for truthy values before returning. Reminder: an empty list is
   // falsy
@@ -166,14 +191,14 @@ exports.__get_type = (data) => {
     let comments = lookup("Comments", data);
     if (comments) {
       categories.push("Helical");
-      pattern = /^(?<scan_type>.*) scan completed .*$/;
+      let pattern = /^(?<scan_type>.*) scan completed .*$/;
       // Since more than one comment could be returned, just assume
       // that it should be a list. So create a list of a single value
       // if just a string is found
       if (comments instanceof String || typeof comments === "string") {
         comments = [comments];
       }
-      for (comment of comments) {
+      for (let comment of comments) {
         let m = comment.match(pattern);
         if (m) {
           if ("scan_type" in m.groups) {
@@ -198,9 +223,9 @@ exports.__get_type = (data) => {
 
   // IF we reach here, no scan type could be found
   return [null, null];
-};
+}
 
-exports.__get_source_to_detector_distance = (data) => {
+export function __get_source_to_detector_distance(data) {
   const tag =
     data["NSI_Reconstruction_Project"]["CT_Project_Configuration"][
       "Technique_Configuration"
@@ -211,18 +236,18 @@ exports.__get_source_to_detector_distance = (data) => {
   } else {
     console.error("Couldn't find the source to detector distance");
   }
-};
+}
 
-exports.__get_source_to_table_distance = (data) => {
+export function __get_source_to_table_distance(data) {
   const tag =
     data["NSI_Reconstruction_Project"]["CT_Project_Configuration"][
       "Technique_Configuration"
     ]["Setup"];
   if (Object.keys(tag).includes("source_to_table_distance"))
     return tag["source_to_table_distance"];
-};
+}
 
-exports.__get_pitch = (data) => {
+export function __get_pitch(data) {
   const tag =
     data["NSI_Reconstruction_Project"]["CT_Project_Configuration"][
       "Technique_Configuration"
@@ -231,29 +256,29 @@ exports.__get_pitch = (data) => {
     let value = lookup("det_pitch", tag["Ug"]);
     if (value) return value;
   }
-};
+}
 
-exports.__estimate_slicethickness = (
+export function __estimate_slicethickness(
   pitch,
   source_to_detector_distance,
   source_to_table_distance
-) => {
+) {
   if (pitch && source_to_detector_distance && source_to_table_distance) {
     return (pitch / source_to_detector_distance) * source_to_table_distance;
   }
   console.warn("Could not estimate slice thickness");
-};
+}
 
-exports.__get_resolution = (data) => {
+export function __get_resolution(data) {
   const tag = data["NSI_Reconstruction_Project"];
   // When a recon has been done
   if (Object.keys(tag).includes("Volume")) {
     let dimensions = lookup("resolution", tag["Volume"]);
-    dimentions = dimensions.split(/\s+/);
+    let dimentions = dimensions.split(/\s+/);
     let [w, d, h] = dimentions;
     return [w, h, d];
   }
-};
+}
 
 // def __get_voltage():
 // reported_voltage = lookup("kV",  data["NSI_Reconstruction_Project"]["CT_Project_Configuration"]["Technique_Configuration"])
@@ -263,7 +288,7 @@ exports.__get_resolution = (data) => {
 //     actual_voltage = None
 // return reported_voltage, actual_voltage
 
-exports.__get_voltage = (data) => {
+export function __get_voltage(data) {
   const tag =
     data["NSI_Reconstruction_Project"]["CT_Project_Configuration"][
       "Technique_Configuration"
@@ -274,9 +299,9 @@ exports.__get_voltage = (data) => {
   // Edge case: sometimes an actual voltage is not recorded, so use the reported one instead
   if (!actual_voltage) actual_voltage = null;
   return [reported_voltage, actual_voltage];
-};
+}
 
-exports.__get_current = (data) => {
+export function __get_current(data) {
   const tag =
     data["NSI_Reconstruction_Project"]["CT_Project_Configuration"][
       "Technique_Configuration"
@@ -287,25 +312,26 @@ exports.__get_current = (data) => {
 
   if (!actual_current) actual_current = null;
   return [reported_current, actual_current];
-};
+}
 
 // NOTE(tparker): I'm not 100% sure that this is the actual filter that the technicians report
-exports.__get_filter = (data) => {
+export function __get_filter(data) {
   const tag =
     data["NSI_Reconstruction_Project"]["CT_Project_Configuration"][
       "Technique_Configuration"
     ];
   return lookup("phys_filter", tag);
-};
+}
 
-exports.__get_framerate = (data) =>
-  lookup(
+export function __get_framerate(data) {
+  return lookup(
     "fps",
     data["NSI_Reconstruction_Project"]["CT_Project_Configuration"][
       "Technique_Configuration"
     ]["Detector"]
   );
-exports.__get_calcuated_Ug = (data) => {
+}
+export function __get_calcuated_Ug(data) {
   const tag =
     data["NSI_Reconstruction_Project"]["CT_Project_Configuration"][
       "Technique_Configuration"
@@ -317,9 +343,9 @@ exports.__get_calcuated_Ug = (data) => {
     }
   }
 
-  value = lookup("ug_text", tag["Ug"]);
+  let value = lookup("ug_text", tag["Ug"]);
   if (value) {
-    pattern = /^.*\((?<value>\S+)\s+pixels\)$/;
+    let pattern = /^.*\((?<value>\S+)\s+pixels\)$/;
     let m = value.match(pattern);
     if (m) {
       if (value in m.groups) {
@@ -327,8 +353,8 @@ exports.__get_calcuated_Ug = (data) => {
       }
     }
   }
-};
-exports.__get_zoom_factor = (data) => {
+}
+export function __get_zoom_factor(data) {
   const tag =
     data["NSI_Reconstruction_Project"]["CT_Project_Configuration"][
       "Technique_Configuration"
@@ -337,45 +363,134 @@ exports.__get_zoom_factor = (data) => {
     let value = lookup("zoom_factor_text", tag["Ug"]);
     if (value) return parseFloat(value.slice(1)); // remove surrounding parentheses and units (in pixels)
   }
-};
-exports.__get_projection_count = (data) => {
+}
+export function __get_projection_count(data) {
   return lookup("Number_of_projections");
-};
-exports.__get_rotation_count = (data) => {
+}
+export function __get_rotation_count(data) {
   // only applies to VorteX scans
+  let vortex_metadata;
   const tag = data["NSI_Reconstruction_Project"]["CT_Project_Configuration"];
   if (Object.keys(tag).includes("VorteX")) {
-    let vortex_metadata = tag["VorteX"];
-    if (vortex_metadata && vortex_metadata.includes("Revs"))
+    vortex_metadata = tag["VorteX"];
+    if (vortex_metadata && Object.keys(vortex_metadata).includes("Revs"))
       return vortex_metadata["Revs"];
   }
-};
-exports.__get_frames_averaged = (data) => {
+}
+export function __get_frames_averaged(data) {
   return lookup("Frame_averaging", data);
-};
-exports.__get_helical_pitch = (data) => {
+}
+export function __get_helical_pitch(data) {
   const tag = data["NSI_Reconstruction_Project"]["CT_Project_Configuration"];
   if (Object.keys(tag).includes("VorteX")) {
     let vortex_metadata = tag["VorteX"];
-    if (vortex_metadata && vortex_metadata.includes("Pitch")) {
+    if (vortex_metadata && Object.keys(vortex_metadata).includes("Pitch")) {
       return vortex_metadata["Pitch"];
     }
   }
-};
-exports.__get_defective_pixels = (data) => {
+}
+export function __get_defective_pixels(data) {
   let statuses = lookup("status", data);
-  if (statuses instanceof String || typeof statuses === "string") {
+  if (!Array.isArray(statuses)) {
     statuses = [statuses];
   }
-  for (status of statuses) {
-    let pattern = /^(?<pixel_count>\d+) defective .*$/;
+  for (let status of statuses) {
+    // Edge case: no status or defective pixels were reported/recorded
+    if (!status) {
+      continue;
+    }
+    let pattern = /(?<pixel_count>\d+)\s+defective .*$/i;
     let m = status.match(pattern);
-    if ("pixel_count" in m.groups) {
+    if (m && "pixel_count" in m.groups) {
       return parseInt(m.groups.pixel_count);
     }
   }
-};
+  return null;
+}
 
-exports.lookup = lookup;
-exports.get_all_keys = get_all_keys;
-exports.convertShortArraysToSingleValues = convertShortArraysToSingleValues;
+export function tabulateJson(data) {
+  const bf = data["NSI_Reconstruction_Project"]; // base fields
+  const df = data["derived_fields"]; // derived fields
+  const {
+    part_name,
+    acquisition_duration,
+    scan_type,
+    scan_type_category,
+    source_to_detector_distance,
+    source_to_table_distance,
+    pitch,
+    estimated_slicethickness,
+    filter,
+    zoom_factor,
+    frames_averaged,
+    defective_pixels,
+  } = df;
+  let expected_export_filename = df["part_name"];
+  if (estimated_slicethickness) {
+    expected_export_filename =
+      [df["part_name"], estimated_slicethickness.toFixed(3) * 1000].join("_") +
+      "um";
+  }
+  const session_name = df["session_name"];
+  const efx_dr_version = df["acquisition_software_version"];
+  const source = df["source"];
+  const source_voltage_reported = source["voltage"]["reported_voltage"];
+  const source_voltage_actual = source["voltage"]["actual_voltage"];
+  const source_current_reported = source["current"]["reported_current"];
+  const source_current_actual = source["current"]["actual_current"];
+
+  let result = {
+    part_name,
+    session_name,
+    expected_export_filename,
+    acquisition_duration,
+    scan_type,
+    scan_type_category,
+    efx_dr_version,
+    estimated_slicethickness,
+    defective_pixels,
+    source_to_detector_distance,
+    source_to_table_distance,
+    pitch,
+    filter,
+    zoom_factor,
+    frames_averaged,
+    source_voltage_reported,
+    source_voltage_actual,
+    source_current_reported,
+    source_current_actual,
+  };
+
+  // Convert datetime objects to ISO strings
+  const acquisition_start = df["acquisition_start"].toJSON();
+  const acquisition_finish = df["acquisition_finish"].toJSON();
+  result = { acquisition_start, acquisition_finish, ...result };
+
+  // Clean up null and undefined
+  for (let key of Object.keys(result)) {
+    if (result[key] === "" || result[key] === undefined) {
+      result[key] = null;
+    }
+  }
+
+  // Dimensions may not be present. It may only be present when individually
+  // reconstructed or individually exported.
+  if (Object.keys(df).includes("dimensions")) {
+    const { width, height, depth } = df["dimensions"];
+    result = {
+      ...result,
+      width,
+      height,
+      depth,
+    };
+  }
+
+  return result;
+}
+
+const _lookup = lookup;
+export { _lookup as lookup };
+const _get_all_keys = get_all_keys;
+export { _get_all_keys as get_all_keys };
+const _convertShortArraysToSingleValues = convertShortArraysToSingleValues;
+export { _convertShortArraysToSingleValues as convertShortArraysToSingleValues };
