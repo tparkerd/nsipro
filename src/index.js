@@ -1,32 +1,31 @@
-const xml2js = require("xml2js");
-const { parseNumbers, parseBooleans } = require("xml2js/lib/processors");
-const { DateTime } = require("luxon");
-const {
-  get_acquisition_begin,
-  get_all_keys,
-  convertShortArraysToSingleValues,
-  lookup,
-  __get_session_name,
-  __get_acquisition_begin,
-  __get_acquisition_end,
-  __get_type,
-  __get_source_to_detector_distance,
-  __get_source_to_table_distance,
-  __get_pitch,
+import {
   __estimate_slicethickness,
-  __get_resolution,
-  __get_voltage,
+  __get_acquisition_finish,
+  __get_acquisition_start,
+  __get_calcuated_Ug,
   __get_current,
+  __get_defective_pixels,
   __get_filter,
   __get_framerate,
-  __get_calcuated_Ug,
-  __get_zoom_factor,
-  __get_projection_count,
-  __get_rotation_count,
   __get_frames_averaged,
   __get_helical_pitch,
-  __get_defective_pixels,
-} = require("./util.js");
+  __get_pitch,
+  __get_projection_count,
+  __get_resolution,
+  __get_rotation_count,
+  __get_session_name,
+  __get_source_to_detector_distance,
+  __get_source_to_table_distance,
+  __get_type,
+  __get_voltage,
+  __get_zoom_factor,
+  convertShortArraysToSingleValues,
+  lookup,
+} from "./util.js";
+import { parseBooleans, parseNumbers } from "xml2js/lib/processors.js";
+
+import { DateTime } from "luxon";
+import { parseStringPromise } from "xml2js";
 
 /**
  * Converts .NSIPRO file's xml-like structure into standard XML format
@@ -34,15 +33,15 @@ const {
  * @returns {string} XML representation of NSIPRO file format
  */
 const standardize = (text) => {
-  tag_pattern = /<(?<content>[^<>]+)>/g;
+  const tag_pattern = /<(?<content>[^<>]+)>/g;
 
   // Edge case: <ug text> can have the pixel value on the following line
-  ug_text_pattern = /\s+(?<ug_text>\(\S+\s+pixels\))$/gm;
-  ug_text_fixed = " $1";
+  const ug_text_pattern = /\s+(?<ug_text>\(\S+\s+pixels\))$/gm;
+  const ug_text_fixed = " $1";
   text = text.replace(ug_text_pattern, ug_text_fixed);
 
   // Split the text into individual lines
-  lines = text.split(/\r?\n\s*/);
+  let lines = text.split(/\r?\n\s*/);
 
   // Remove spaces within tags
   lines = lines.map((line) => {
@@ -51,9 +50,23 @@ const standardize = (text) => {
     });
   });
 
+  // Prefix any tags that start with number with underscore
+  const numeric_initial_pattern = /^\d/;
+  let replacement = "_$<content>";
+  lines = lines.map((line) => {
+    // If it has a numeric initial, insert an underscore
+    return line.replace(tag_pattern, (match, content, offset, string) => {
+      if (numeric_initial_pattern.test(content)) {
+        let t = match.replace(tag_pattern, replacement);
+        return t;
+      }
+      return match;
+    });
+  });
+
   // Close single-line tags
-  open_tag_pattern = /^<(?<tag>[^>]+)>(?<value>[^<]+)$/;
-  close_tags = "<$<tag>>$<value></$<tag>>";
+  const open_tag_pattern = /^<(?<tag>[^>]+)>(?<value>[^<]+)$/;
+  const close_tags = "<$<tag>>$<value></$<tag>>";
   lines = lines.map((line) => {
     return line.replace(open_tag_pattern, close_tags);
   });
@@ -66,6 +79,12 @@ const standardize = (text) => {
   // Edge case: <phys_filter> can have a null value
   lines = lines.map((line) => {
     return line.replace(/^<phys_filter>$/, "<phys_filter></phys_filter>");
+  });
+
+  // Edge case: <serial> can have a null value
+  lines = lines.map((line) => {
+    return line.replace(/^<serial>$/, "<serial></serial>");
+    return line.replace();
   });
 
   // Edge case: <Software> can have a null value
@@ -103,18 +122,20 @@ const cast_dtypes = async (xml) => {
     let dt;
 
     // There are two possible formats used, depending on the NSI software version
-    const datetime_format = "dd-LLL-yy hh:mm:ss a";
+    const datetime_format = "dd-LLL-yy h:mm:ss a";
     dt = DateTime.fromFormat(str, datetime_format);
     if (dt.isValid) return dt;
 
-    const datetime_format_alt = "LL/dd/kkkk hh:mm:ss a";
+    // Example: 12/14/2016 10:59:24 AM
+    // month/day/year hour:minute:second meridiem
+    const datetime_format_alt = "LL/dd/yyyy h:mm:ss a";
     dt = DateTime.fromFormat(str, datetime_format_alt);
     if (dt.isValid) return dt;
 
     return str;
   };
 
-  const json = await xml2js.parseStringPromise(xml, {
+  const json = await parseStringPromise(xml, {
     mergeAttrs: true,
     valueProcessors: [parseNumbers, parseBooleans, parseTimestamp],
   });
@@ -138,10 +159,10 @@ const parse = async (fname, text) => {
 
     // Collate key-value pairs of interest
     let session_name = __get_session_name(json);
-    let acquisition_begin = __get_acquisition_begin(json);
-    let acquisition_end = __get_acquisition_end(json);
-    let acquisition_duration = acquisition_end.diff(
-      acquisition_begin,
+    let acquisition_start = __get_acquisition_start(json);
+    let acquisition_finish = __get_acquisition_finish(json);
+    let acquisition_duration = acquisition_finish.diff(
+      acquisition_start,
       "seconds"
     ); // duration as datetime object
     let uid = lookup("Part_name", json); // the 'part name' entered by technician
@@ -175,19 +196,19 @@ const parse = async (fname, text) => {
     let defective_pixels = __get_defective_pixels(json);
 
     json["derived_fields"] = {};
-    dfields = json["derived_fields"];
+    let dfields = json["derived_fields"];
     dfields["nsipro_filepath"] = fname;
 
     // Scan Duration (acquisition)
     // ISO format: YYYY-MM-DDThh:mm:ssTZD
-    dfields["acquisition_begin"] = acquisition_begin;
-    dfields["acquisition_end"] = acquisition_end;
+    dfields["acquisition_start"] = acquisition_start;
+    dfields["acquisition_finish"] = acquisition_finish;
     dfields["acquisition_duration"] = acquisition_duration.seconds;
 
     // Identifiers
     // NSI Project folder (i.e., session name)
     dfields["session_name"] = session_name;
-    dfields["uid"] = uid;
+    dfields["part_name"] = uid;
 
     // High-level scan details
     dfields["scan_type"] = _type;
@@ -235,8 +256,12 @@ const parse = async (fname, text) => {
 
     return json;
   } catch (error) {
-    console.error(error);
+    // console.error(error);
+    let xml = standardize(text);
+    console.error(xml);
+    throw error;
   }
 };
 
-exports.parse = parse;
+const _parse = parse;
+export { _parse as parse };
