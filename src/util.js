@@ -412,7 +412,7 @@ export function tabulateJson(data) {
   const bf = data["NSI_Reconstruction_Project"]; // base fields
   const df = data["derived_fields"]; // derived fields
   const {
-    uid,
+    part_name,
     acquisition_duration,
     scan_type,
     scan_type_category,
@@ -425,8 +425,13 @@ export function tabulateJson(data) {
     frames_averaged,
     defective_pixels,
   } = df;
-  const name = df["uid"];
-  const projectname = df["session_name"];
+  let expected_export_filename = df["part_name"];
+  if (estimated_slicethickness) {
+    expected_export_filename =
+      [df["part_name"], estimated_slicethickness.toFixed(3) * 1000].join("_") +
+      "um";
+  }
+  const session_name = df["session_name"];
   const efx_dr_version = df["acquisition_software_version"];
   const source = df["source"];
   const source_voltage_reported = source["voltage"]["reported_voltage"];
@@ -435,21 +440,21 @@ export function tabulateJson(data) {
   const source_current_actual = source["current"]["actual_current"];
 
   let result = {
-    uid,
+    part_name,
+    session_name,
+    expected_export_filename,
     acquisition_duration,
     scan_type,
     scan_type_category,
+    efx_dr_version,
+    estimated_slicethickness,
+    defective_pixels,
     source_to_detector_distance,
     source_to_table_distance,
     pitch,
-    estimated_slicethickness,
     filter,
     zoom_factor,
     frames_averaged,
-    defective_pixels,
-    name,
-    projectname,
-    efx_dr_version,
     source_voltage_reported,
     source_voltage_actual,
     source_current_reported,

@@ -208,7 +208,7 @@ const parse = async (fname, text) => {
     // Identifiers
     // NSI Project folder (i.e., session name)
     dfields["session_name"] = session_name;
-    dfields["uid"] = uid;
+    dfields["part_name"] = uid;
 
     // High-level scan details
     dfields["scan_type"] = _type;
